@@ -1,0 +1,645 @@
+---
+title: "hw1_Siyu"
+author: "Siyu Zou"
+date: "2024-02-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(splines)
+```
+
+
+```{r}
+## Read the data
+getwd()
+setwd("/Users/zousiyu/Library/CloudStorage/OneDrive-JohnsHopkins/Term 3/bios_653")
+load("/Users/zousiyu/Library/CloudStorage/OneDrive-JohnsHopkins/Term 3/bios_653/lab/lab1/NepalAnthroZip/nepal.anthro.rdata")
+
+```
+
+
+## data clean
+Use only the first observation for each child and only those children with complete data on age, height and weight.
+```{r}
+## Complete cases
+nepal_cc <- nepal.anthro |> arrange(id, num) |> group_by(id) |>
+  filter(row_number() == 1L) |>
+  select(id, age, ht, wt, sex) |> 
+  filter(!is.na(age) & !is.na(ht) & !is.na(wt)) |>
+  ungroup()
+
+```
+
+# Q1-Problem 1&2: weight against age
+```{r}
+# plot weight against age
+nepal_cc <- nepal_cc %>%
+  mutate(gender = factor(sex, levels = c(1, 2), labels = c("Male", "Female")))
+
+# figure 1
+plot_wt_age <- nepal_cc %>%
+  ggplot(aes(x=age, y=wt ) ) +
+  geom_jitter(aes(colour = gender), size = 1.5, alpha = 0.5) +
+  geom_smooth(method = "glm", formula = y ~ ns(x, df = 3), se=TRUE, linewidth = 1) + 
+  labs(x = "Age at baseline (in months)",
+       y = "Weight at baseline (in kilograms)",
+       colour = "Gender") +
+  scale_x_continuous(breaks = seq(0, 60, 10)) +
+  scale_y_continuous(breaks = seq(0, 20, 5)) +
+  theme_minimal()
+
+plot_wt_age
+
+
+# figure 2: stratified by sex
+plot_wt_age_sex <- nepal_cc %>%
+  ggplot(aes(x=age, y=wt, colour = gender ) ) +
+  geom_jitter( size = 1.5, alpha = 0.5) +
+  geom_smooth(method = "glm", formula = y ~ ns(x, df = 3), se=TRUE, linewidth = 1) + 
+  labs(x = "Age at baseline (in months)",
+       y = "Weight at baseline (in kilograms)",
+       colour = "Gender") +
+  scale_x_continuous(breaks = seq(0, 60, 10)) +
+  scale_y_continuous(breaks = seq(0, 20, 5)) +
+  theme_minimal()
+
+plot_wt_age_sex
+
+
+```
+The weights of 185 children ranging from 1 to 60 months of age were plotted as a function of age.  The average (SD) weight of 12 month olds is approximately 7.0 (0.4) kg, respectively. Average and SD of weight increases with age such that the average (SD) weight is approximately 12.0 (0.25) and 13.5 (0.65) for children aged 36 and 60 months, respectively.  
+
+
+# Q1-Problem 3 - Fit the simple linear regression
+```{r}
+# Simple linear model
+model1_simple <- lm(wt ~ age, data = nepal_cc)
+
+summary(model1_simple)
+confint(model1_simple)
+```
+On average, children at birth has weight of 5.445 kg (95% CI 5.041 to 5.848). Difference in average weight comparing children who differ in age by 1 month is 0.157 kg. The residual standard deviation is 1.401 means the model estimates an average deviation of 1.4 kilograms between the observed and predicted average weight of children.
+
+# Q1-Problem 4.a
+The assumption of linearity is supported by the data, as the increase in average weight is relatively consistent with age. This steady trend suggests a linear model could appropriately describe the relationship between age and weight.
+
+# Q1-Problem 4.b
+Add the fitted line to figure 1: 
+The assumption that variation in weights keeps same at each age is not resonable. The scatter plot shows varying spreads in weight at different ages, with a noticeable increase in spread as age advances, indicating changing variability in weight.
+```{r}
+# Predict the values
+nepal_cc <- nepal_cc |>
+  mutate(model1_simple_pred = predict(model1_simple))
+         
+# Add lines for each model
+model_add_simple <- plot_wt_age +
+  geom_line(data = nepal_cc, aes(color = "red", y = model1_simple_pred,
+                             x = age), linewidth = 1.5) 
+
+#   geom_line(data = data, aes(color = "2", y = model2_simplelog_pred,
+#                              x = GA.at.outcome), size = 1.5) +
+#   geom_line(data = data, aes(color = "3", y = model3_ns_pred,
+#                              x = GA.at.outcome), size = 1.5) +
+  # Add the color legend specifications
+
+
+model_add_simple <- nepal_cc %>%
+  ggplot() +
+  geom_jitter(aes(x=age, y=wt, colour = gender), size = 1.5, alpha = 0.5) +
+  geom_smooth(method = "glm", formula = y ~ ns(x, df = 3), aes(x=age, y=wt),  colour = "blue", se=TRUE, linewidth = 1) + 
+  geom_line(data = nepal_cc, aes( y = model1_simple_pred,
+                             x = age), colour = "red",se=TRUE, linewidth = 1)  +
+  labs(x = "Age at baseline (in months)",
+       y = "Weight at baseline (in kilograms)",
+       colour = "Gender") +
+  scale_x_continuous(breaks = seq(0, 60, 10)) +
+  scale_y_continuous(breaks = seq(0, 20, 5)) +
+  theme_minimal()
+
+model_add_simple
+```
+
+# Q2
+### Problem 1
+a.create three new variables: 
+```{r}
+nepal_cc=mutate(nepal_cc,
+age_c = age-6,
+agesp6=ifelse(age-6>0, age-6,0),
+agesp12=ifelse(age-12>0, age-12,0) )
+
+# check what predictors for linear splines look like
+pairs(select(nepal_cc,age_c,agesp6,agesp12),pch=".",
+main="Pairs Plot of Age Linear Spline Vars")
+```
+### Problem 2
+b.Regress weight on age_c, age_sp6 and age_sp12
+```{r}
+reg_1 <- lm(data = nepal_cc, wt~age_c + agesp6 + agesp12)
+summary(reg_1)
+```
+
+### Problem 3
+c.Plot the raw weight against age data; add the fitted values from this regression.
+```{r}
+nepal_cc <- nepal_cc |>
+  mutate(model1_spline_pred = predict(reg_1))
+         
+# Add fitted values for linear spline model
+model_spline <- nepal_cc %>%
+  ggplot(aes(x = age, y = wt))  +
+  geom_jitter() + 
+  geom_line(data = nepal_cc, aes( y = model1_spline_pred,
+                             x = age), colour = "red", se = TRUE, linewidth = 1.5) +
+  labs(y = "Average weight (in kg)", x = "Age (in months)") 
+
+model_spline
+
+ggplot(nepal_cc, aes(x = age, y = wt)) +
+    theme_bw() +
+    geom_jitter(alpha = 0.5) +
+    geom_line(aes(color = "1", x = age, y = reg_1$fitted.values),lwd=1.25) +
+    geom_smooth(aes(color = "2"),method = 'loess' , span=0.3,lwd=1) +
+    scale_y_continuous(breaks=seq(8,18,2)) +
+    scale_x_continuous(breaks=seq(0,60,6)) +
+    labs(y = "Average weight (in kg)", x = "Age (in months)") +
+    scale_color_manual(breaks = c("1", "2"),
+                       values = c("#024873", "#920045"),
+                       labels = c("linear spline",
+                                  "loess with span = 0.3")) +
+  theme(panel.border = element_blank(),
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  axis.line = element_line(colour = "black"))
+
+```
+### Problem 4 d.Using simple language free of statistical jargon, write a sentence describing the model you fit. 
+The model shows for children aged from 1 month to 60 months, the average weight increases as children get older, following a linear trend.
+
+
+### Problem 5 e. Interpret the meaning of the coefficients for the three terms: age_c, age_sp6 and age_sp12 as if for a growth journal.
+
+The average weight among 6 month old children is eatimated to be 6.5171 kg (95% CI 5.7288-7.3054), with estimated monthly difference in average weight of 0.5282 kg for children aged 1-6 months, -0.3423 kg for children aged 6-12 months, and -0.0394 kg for children over 12 months of age.
+
+### Problem 6 f.Comment in a few sentences on the evidence from this analysis for or against a linear growth curve
+
+The plot supports a linear growth pattern, with the average weight steadily increasing with age, indicative of a consistent growth rate throughout the age range.
+
+
+# Q3- 2ab cubic regression splines
+create three new variables: 
+
+```{r}
+
+nepal_cc=mutate(nepal_cc,
+                age2 = (age-6) * (age-6) ,
+                age3 = (age-6) * (age-6) * (age-6) ,
+                age_csp1 = ifelse(age-6>0, (age-6)^3,0) )
+reg_2 <- lm(data = nepal_cc, wt ~ age_c + age2 + age3 + age_csp1 )
+summary(reg_2)
+
+```
+
+# Q3- 2c
+Plot the weight data with the fitted values from this “cubic regression spline” 
+```{r}
+ggplot(nepal_cc, aes(x = age, y = wt)) +
+    theme_bw() +
+    geom_jitter(alpha = 0.5) +
+    geom_line(aes(color = "1", x = age, y = reg_1$fitted.values),lwd=1.25) +
+    geom_line(aes(color = "2", x = age, y = reg_2$fitted.values),lwd=1.25) +
+    # geom_smooth(aes(color = "3"), method = 'loess' , span=0.3,lwd=1) +
+    scale_y_continuous(breaks=seq(8,18,2)) +
+    scale_x_continuous(breaks=seq(0,60,6)) +
+    labs(y = "Average weight (in kg)", x = "Age (in months)") +
+    scale_color_manual(breaks = c("1", "2" ),
+                       values = c("#024873", "#920045" ),
+                       labels = c("linear spline",
+                                  "cubic regression spline"
+                                  )) +
+  theme(panel.border = element_blank(),
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  axis.line = element_line(colour = "black"))
+```
+
+# Q3- 2d
+
+From the figure above, we could see the cubic splines fits the observed data better than the linear spline, and the trend is more smooth at the knots.
+
+# Q2-3 Natural cubic splines
+
+```{r}
+reg_ns <- lm(wt ~ ns(age, 3), data = nepal_cc)
+summary(reg_ns)
+
+
+```
+
+c.Plot the weight data as above in 2c. Add the fitted values from this “natural cubic spline” along with the fitted values from the linear spline and cubic regression spline. 
+```{r}
+ggplot(nepal_cc, aes(x = age, y = wt)) +
+    theme_bw() +
+    geom_jitter(alpha = 0.5) +
+    geom_line(aes(color = "1", x = age, y = reg_1$fitted.values),lwd=1.25) +
+    geom_line(aes(color = "2", x = age, y = reg_2$fitted.values),lwd=1.25) +
+    geom_line(aes(color = "3", x = age, y = reg_ns$fitted.values), lwd=1.25) +
+    scale_y_continuous(breaks=seq(8,18,2)) +
+    scale_x_continuous(breaks=seq(0,60,6)) +
+    labs(y = "Average weight (in kg)", x = "Age (in months)") +
+    scale_color_manual(breaks = c("1", "2", "3" ),
+                       values = c("#024873", "#920045", "#67733C" ),
+                       labels = c("linear spline",
+                                  "cubic regression spline",
+                                  "natural cubic spline"
+                                  )) +
+  theme(panel.border = element_blank(),
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  axis.line = element_line(colour = "black"))
+```
+
+# Q2-d.
+Contrast your estimated curves.  Which curve do you think is most consistent with the observed data?  What factors are you using to make this decision?
+
+Natural cubic spline is the most consistent with the observed data. 
+The natural cubic spline is smoother than linear spline, especially at the knots. The natural cubic spline is constrained to be linear when beyond the munimum and maximum values of X, while cubic spline extrapolate the cubic function beyond of X. Natural spline is better to show the overall trend of the observed data and not overfitting the trend or being too sensitive to outliers.
+
+# Q2-3
+X: model.matrix
+“hat” matrix H= X (X’X)-1 X’
+
+t(X) calculates the transpose of the design matrix X.
+%*% is the matrix multiplication operator in R.
+solve() calculates the matrix inverse.
+```{r}
+
+X <- model.matrix(reg_ns)
+# Calculate (X'X) and then the inverse of (X'X)
+XX_inv <- solve(t(X) %*% X)
+
+# Calculate the hat matrix
+hat_matrix <- X %*% XX_inv %*% t(X)
+
+
+# Assuming 'child_ages' is a vector that contains the ages of the three children you're interested in
+child_ages <- c(12, 24, 48)
+child_rows <- c()
+
+for (age in child_ages) {
+  # Find the index of the first occurrence of the age
+  index <- which(nepal_cc$age == age)[1]
+  if (!is.na(index)) {
+    # Append the index to the list if it is found
+    child_rows <- c(child_rows, index)
+  }
+}
+
+# child_rows now contains the row indices of the first child found for each age
+
+# Extract the rows from the hat matrix for the selected children
+selected_H <- hat_matrix[child_rows, ]
+
+# Create a dataframe for plotting
+plot_data <- data.frame(age = rep(nepal_cc$age, times = 3),
+                        weight = c(selected_H[1, ], selected_H[2, ], selected_H[3, ]),
+                        child = factor(rep(child_ages, each = nrow(nepal_cc))))
+
+# Plot each child's row of H against age
+library(ggplot2)
+ggplot(plot_data, aes(x = age, y = weight, color = child)) +
+  geom_line() +
+  labs(title = "Hat Matrix Weights by Age for Selected Children",
+       x = "Age",
+       y = "Weight in Hat Matrix",
+       color = "Child Age") +
+  theme_minimal()
+```
+
+
+# Q3 Cross-validated Prediction Error
+
+```{r}
+## Plot average arm circumference against age and use the custom theme from the label
+plot_wt_age <- ggplot(data = nepal_cc, aes(x = age, y = wt)) +
+  geom_jitter(size = 1.5, alpha = 0.5) +
+  labs(x = "Age at baseline (in months)",
+       y = "Average weight (in kg)",
+       color = "Degrees of freedom") +
+    scale_y_continuous(breaks=seq(8,18,2)) +
+    scale_x_continuous(breaks=seq(0,60,6)) +
+  # Natural spine with increasing degrees of freedom
+  geom_smooth(aes(color = "1"),
+    method = "glm", formula = y ~ ns(x, df = 1), se = FALSE, linewidth = 1) +
+  geom_smooth(aes(color = "2"),
+    method = "glm", formula = y ~ ns(x, df = 2), se = FALSE, linewidth = 1) +
+  geom_smooth(aes(color = "3"),
+    method = "glm", formula = y ~ ns(x, df = 3), se = FALSE, linewidth = 1) +
+  # Add the color legend specifications
+    scale_color_manual(breaks = c("1", "2", "3"),
+                       values = c("#E69F00", "#56B4E9", "#009E73")) +
+  # Add theme
+  theme(legend.position = c(0.8, 0.3),
+      legend.title = element_text(size = 10, face = "bold"),
+      legend.text = element_text(size = 10),
+      legend.key = element_blank())
+
+plot_wt_age
+```
+
+
+# Q3 1- Crossvalidation and calculating corresponding MSE
+
+```{r answer2, warning = FALSE, message = FALSE, cache = TRUE}
+# Set seed
+set.seed(653)
+
+# Store the row numbers in a vector that will be used for the split
+rows <- 1:nrow(nepal_cc)
+
+# Shuffle the rows (sampling without replacement)
+shuffled_rows <- sample(rows, replace = FALSE)
+
+# Declare the number of folds
+B <- 10
+
+# Divide the rows into 10 folds and code each row according to which fold they belong
+folds <- cut(rows, breaks = B, labels = FALSE)
+
+# Create a blank data set to store predicted values from cross validation
+pred_wt <- NULL
+
+# Conduct the cross-validation procedure
+for (i in 1:B) {
+  
+  # Divide the data set into training and test data set and specify the row numbers
+  test_rows <- shuffled_rows[which(folds == i)]
+  train_rows <- shuffled_rows[which(folds != i)]
+  
+  # Call the relevant rows in the data
+  test_data <- nepal_cc[test_rows, ]
+  train_data <- nepal_cc[train_rows, ]
+  
+  # Fit the models and calculate predicted values
+  # 1 degree of freedom
+  model1_train <- lm(wt ~ ns(age, 1), data = train_data)
+  test_data <- test_data |> mutate(model1_pred = predict(model1_train, newdata = test_data))
+  # 2 degree of freedom
+  model2_train <- lm(wt ~ ns(age, 2), data = train_data)
+  test_data <- test_data |> mutate(model2_pred = predict(model2_train, newdata = test_data))
+  # 3 degree of freedom
+  model3_train <- lm(wt ~ ns(age, 3), data = train_data)
+  test_data <- test_data |> mutate(model3_pred = predict(model3_train, newdata = test_data))
+
+  # Stack the data altogether
+  pred_wt <- rbind(pred_wt, test_data)
+}
+
+# Calculate cross-validated MSE
+model1_cvmse <- mean((pred_wt$wt - pred_wt$model1_pred)^2)
+model2_cvmse <- mean((pred_wt$wt - pred_wt$model2_pred)^2)
+model3_cvmse <- mean((pred_wt$wt - pred_wt$model3_pred)^2)
+
+# Append the cross validated MSE to the model_mse data frame
+model_mse <- 
+  data.frame(df = c(1, 2, 3),
+             cvmse = c(model1_cvmse, model2_cvmse, model3_cvmse))
+
+library(knitr)
+kable(model_mse,  align = "lc",
+      col.names = c("Degrees of freedom", "Cross validated MSE"))
+```
+
+
+```{r}
+# Set seed for reproducibility
+set.seed(653)
+
+# Store the row numbers in a vector that will be used for the split
+rows <- 1:nrow(nepal_cc)
+
+# Shuffle the rows (sampling without replacement)
+shuffled_rows <- sample(rows, replace = FALSE)
+
+# Declare the number of folds for cross-validation
+B <- 10
+
+# Divide the rows into B folds and code each row according to which fold they belong
+folds <- cut(shuffled_rows, breaks = B, labels = FALSE)
+
+# Create a blank data frame to store predicted values from cross-validation
+pred_wt <- data.frame()
+
+# Create a vector to store cross-validated MSE for each model
+cv_mse <- numeric(8)
+
+# Conduct the cross-validation procedure
+for (df in 1:8) {
+  for (i in 1:B) {
+    # Divide the data set into training and test data set and specify the row numbers
+    test_rows <- shuffled_rows[which(folds == i)]
+    train_rows <- shuffled_rows[which(folds != i)]
+    
+    # Call the relevant rows in the data
+    test_data <- nepal_cc[test_rows, ]
+    train_data <- nepal_cc[train_rows, ]
+    
+    # Fit the model with df degrees of freedom
+    model_train <- lm(wt ~ ns(age, df), data = train_data)
+    
+    # Calculate predicted values
+    test_data$pred <- predict(model_train, newdata = test_data)
+    
+    # Stack the predicted values
+    pred_wt <- rbind(pred_wt, test_data)
+  }
+  
+  # Calculate cross-validated MSE for the current degree of freedom
+  cv_mse[df] <- mean((pred_wt$wt - pred_wt$pred)^2)
+  
+  # Clear pred_wt for the next degree of freedom
+  pred_wt <- data.frame()
+}
+
+# Create a data frame to store the degrees of freedom and their corresponding MSE
+model_mse <- data.frame(df = 1:8, cvmse = cv_mse)
+
+# Output the MSE for each model
+print(model_mse)
+
+# Identify the model with the lowest MSE
+best_df <- model_mse$df[which.min(model_mse$cvmse)]
+print(paste("The best degree of freedom is:", best_df))
+
+```
+
+
+```{r}
+set.seed(653)
+rows <- 1:nrow(nepal_cc)
+shuffled_rows <- sample(rows, replace = FALSE)
+B <- 10
+folds <- cut(shuffled_rows, breaks = B, labels = FALSE)
+pred_wt <- data.frame()
+cv_mse <- numeric(8)
+
+# Conduct the cross-validation procedure
+for (df in 1:8) {
+  for (i in 1:B) {
+    # Divide the data set into training and test data set 
+    test_rows <- shuffled_rows[which(folds == i)]
+    train_rows <- shuffled_rows[which(folds != i)]
+    
+    test_data <- nepal_cc[test_rows, ]
+    train_data <- nepal_cc[train_rows, ]
+    
+    model_train <- lm(wt ~ ns(age, df), data = train_data)
+    test_data$pred <- predict(model_train, newdata = test_data)
+    pred_wt <- rbind(pred_wt, test_data)
+  }
+  cv_mse[df] <- mean((pred_wt$wt - pred_wt$pred)^2)
+  pred_wt <- data.frame()
+}
+
+model_mse <- data.frame(df = 1:8, cvmse = cv_mse)
+print(model_mse)
+
+```
+
+## Q3 3 Plot the total cross-validated prediction error against the degrees of freedom
+
+```{r}
+# Plot the cross-validated prediction error against the degrees of freedom
+ggplot(model_mse, aes(x = df, y = cvmse)) +
+  geom_line() +
+  geom_point(size = 2) +
+  labs(title = "Cross-Validated Prediction Error vs. Degrees of Freedom",
+       x = "Degrees of Freedom (df)",
+       y = "Cross-Validated MSE") +
+  theme_minimal()
+```
+
+
+
+# Q3 -4 Compare the cross-validated prediction error to the non-CV prediction error 
+```{r}
+# non-CV
+nonCV_mse <- numeric(8)
+model_crude <- list() 
+
+for (df in 1:8) {
+  model_crude[[df]] <- lm(wt ~ ns(age, df), data = nepal_cc)
+  predictions <- predict(model_crude[[df]], nepal_cc)   # Predict using the fitted model on the same data
+  residuals <- nepal_cc$wt - predictions
+  nonCV_mse[df] <-  mean(residuals^2)
+}
+
+# Combine CV and non-CV MSEs into a data frame for comparison
+combined_mse <- data.frame(
+  df = 1:8,
+  cv_mse = cv_mse,
+  non_cv_mse = nonCV_mse
+)
+print(combined_mse)
+
+
+```
+
+# Q3-5 Fit this optimal model
+
+Based on the cross-validated MSE, model with df = 2 is the optimal model.
+```{r}
+optimal_df <- which.min(cv_mse)  # Identify the optimal degree of freedom
+optimal_model <- lm(wt ~ ns(age, optimal_df), data = nepal_cc)
+
+# Predict weights using the optimal model across the range of ages
+age_range <- range(nepal_cc$age)
+age_seq <- seq(from = age_range[1], to = age_range[2], length.out = 200)
+predicted_wt <- predict(optimal_model, newdata = data.frame(age = age_seq))
+
+# Plot the actual weight data against age
+plot(nepal_cc$age, nepal_cc$wt, xlab = "Age (in months)", ylab = "Weight (in kg)", 
+     main = "Weight Data and Optimal Natural Spline Curve", pch = 19, col = "blue")
+
+# Add the optimal natural spline curve to the plot
+lines(age_seq, predicted_wt, col = "red", lwd = 2)
+
+
+```
+
+# Q4-1
+```{r}
+# install.packages("scatterplot3d")
+# install.packages("rgl")
+library(rgl)
+library(scatterplot3d)
+
+plot3d(nepal_cc$age,nepal_cc$ht,nepal_cc$wt)
+scatterplot3d(nepal_cc$age,nepal_cc$ht,
+              nepal_cc$wt,pch=16,type="h",highlight.3d=TRUE,
+              xlab="age (months)",ylab="height (cm)",zlab="weight (grams)",
+              main="Nepal Children's Study")
+pairs(nepal_cc[,c(2:4)])
+```
+# Q4 - 2 
+```{r}
+mr1 <- lm(wt ~ age + ht, data = nepal_cc)
+summary(mr1)
+```
+When children at birth and height equals 0, the weight is estimated to be -8.297442 kg, which is not ture for the real world.
+Among children of the same height, their average weight varied tiny with 0.005368 kg (95% CI -0.0146 to 0.0253) every unit of age changed. 
+The standard deviation of the residuals measures the difference between the observed weights and the weights predicted by the model, is 0.9035. The large number indicates  the individual variability in children's weight that age and height alone cannot fully explain.
+
+# Q4-3
+```{r}
+# Obtain residuals R(Y|Z) and R(X|Z)
+nepal_cc <- nepal_cc |>
+  mutate(resid.wt1 = lm(wt ~ ht, data = nepal_cc)$residuals,
+         resid.age1 = lm(age ~ ht, data = nepal_cc)$residuals)
+
+# Run the model of R(Y|Z) on R(X|Z)
+resid.model1 <- lm(resid.wt1 ~ resid.age1, data = nepal_cc)
+summary(resid.model1)
+```
+
+```{r}
+# multiple regression model
+mr1 <- lm(wt ~ age + ht, data = nepal_cc)
+summary(mr1)
+```
+
+```{r}
+# Plot the estimates and we add a fitted line
+avplot1 <- ggplot(data = nepal_cc,
+                  aes(x = resid.age1, y = resid.wt1)) +
+  geom_jitter(alpha = 0.5) +
+  geom_smooth(aes(y = predict(resid.model1)), method = "lm", formula = y ~ x,
+              linewidth = 1, color = "#024873", se = FALSE) +
+  labs(x = "Residuals of age on height",
+       y = "Residuals of weight on height",
+       title = "Adjusted variable plot for weight on age adjusting for height") 
+avplot1
+```
+We see that the slope (5.368*0.001) in resid.model1 is the same as the beta of age (0.005368) in the multiple regression model.
+
+# Q4-4
+In a few sentences, compare the coefficients and confidence intervals for age from the SLR and MLR and explain differences in their interpretations and estimated values. 
+```{r}
+slr <- lm(wt ~ age, data = nepal_cc)
+summary(slr)
+```
+
+The coefficients and confidence intervals for age from the SLR is 0.157 (95% CI 0.146 to 0.168) while from MLR is 0.005368 (95% CI -0.0146 to 0.0253) . 
+When not considering height, children’s average weight change is estimated to be 0.157 kg  (95% CI 0.146 to 0.168) for every unit of changed age.
+MLR shows the age coefficient is practically zero since age was not part of the model to simulate average weight. This means that we expect weight to be independent of age after adjusting for height.
+
+# Q4-5
+A simple linear regression model was fitted to examine the relationship between age (independent variable) and average weight (dependent variable). A multiple linear regression model was fitted to examining the relationship between age and average weight, adjust for height. 
+
+
+
+

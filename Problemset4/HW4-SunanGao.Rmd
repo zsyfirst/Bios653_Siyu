@@ -1,0 +1,278 @@
+---
+title: "HW4-Homework"
+---
+
+**PROMPT 1:** Revise and extend the analysis you conducted in Problem Set 2. Your goal remains the same; to estimate the difference in average medical expenditures between ever and never smokers as a function of age. Now you will consider this question without and with adjustment for potential confounding variables.
+
+You fit a linear model for total expenditures as a function of age (linear spline with knots at 75 and 85 years), indicator for ever smoker and the interaction of the three age terms and ever smoker. Check the appropriateness of this mean model. Propose an alternative mean model if you feel that is warranted.
+
+```{r}
+library(tidyverse)
+library(splines)
+library(ggplot2)
+library(dplyr)
+library(gridExtra)
+
+load('nmes.rdata')
+
+custom_theme <- theme(
+  panel.background = element_blank(),
+  axis.ticks = element_blank(),
+  axis.text = element_text(size = 12),
+  axis.title = element_text(size = 14, face = "bold"),
+  axis.line = element_line(size = 0.5)
+)
+```
+
+### Question-1.1
+```{r}
+## Fit the linear model for total expenditures as a function of age
+dat = nmes
+colnames(dat)[2] = 'age'
+dat = dat %>% filter(age >= 65)
+
+dat$agem65 = dat$age - 65
+dat$age_sp1 = ifelse(dat$age>=75, dat$age - 75, 0)
+dat$age_sp2 = ifelse(dat$age>=85, dat$age - 85, 0)
+dat = dat %>% 
+  mutate(ever = as.numeric(eversmk)) %>% 
+  filter(!is.na(ever))
+
+## Convert male into binary variable
+dat$male = as.factor(dat$male)
+
+mod_1 = lm(totalexp ~ agem65 + age_sp1 + age_sp2 +
+                         + ever
+                         + ever*(agem65 + age_sp1 + age_sp2), dat)
+
+res.fit1 = lm(mod_1$residuals~ns(dat$age, 4))
+summary(mod_1)
+# confint(mod_1)
+```
+
+```{r}
+# Check the appropriateness of this mean model.
+dat$mod_1_res = residuals(mod_1)
+
+ggplot(dat,
+       aes(x = age, y = mod_1_res, color = male)) +
+  geom_point() + 
+  geom_hline(yintercept=0,color="red") + 
+  geom_smooth(aes(x = dat$age, y = res.fit1$fitted.values), method = "loess") + 
+  custom_theme + 
+  ylim(-5000, 5000) + 
+  labs(x = "Age (in months)", y = "Residulas")
+```
+
+```{r}
+# Propose an alternative mean model
+dat$age_sp0 = ifelse(dat$age>=68, dat$age - 68, 0)
+
+mod_1.2 = lm(totalexp ~ agem65 + age_sp0 + age_sp1 + age_sp2 + age_sp2
+                         + ever
+                         + ever*(agem65 + age_sp0 + age_sp1 + age_sp2), dat)
+
+dat$mod_1.2_res = residuals(mod_1.2)
+
+
+res.fit1.2 = lm(mod_1.2$residuals~ns(dat$age, 4))
+
+ggplot(dat,
+       aes(x = age, y = mod_1.2_res, color = male)) +
+  geom_point() + 
+  geom_hline(yintercept=0,color="red") + 
+  geom_smooth(aes(x = dat$age, y = res.fit1.2$fitted.values), method = "loess") + 
+  custom_theme + 
+  ylim(-5000, 5000) + 
+  labs(x = "Age (in months)", y = "Residulas")
+```
+
+### Question-2
+Select up to 5 variables from the NMES dataset that you believe may confound the relationship between **expenditures and smoking status**, at any age
+
+The selected variables: Sex (male); yearsince; cigsaday; RACE3; educate
+```{r}
+# Propose an alternative mean model
+colnames(dat)
+
+mod_2 = lm(totalexp ~ agem65 + age_sp0 + age_sp1 + age_sp2 + age_sp2
+                         + ever*(agem65 + age_sp0 + age_sp1 + age_sp2)
+                         + male + yearsince + cigsaday + RACE3 + educate, dat)
+
+dat$mod_2_res = residuals(mod_2)
+
+ggplot(dat,
+       aes(x = age, y = mod_2_res, color = male)) +
+  geom_point() + 
+  geom_hline(yintercept=0, color="red") + 
+  geom_smooth(aes(x = dat$age, y = res.fit1.2$fitted.values), method = "loess") + 
+  custom_theme + 
+  ylim(-5000, 5000) + 
+  labs(x = "Age (in months)", y = "Residulas")
+```
+
+### Question-3
+Using the results of both models, estimate the unadjusted and adjusted difference in average medical expenditures between ever and never smokers as a function of age, with corresponding 95% CIs based on a statistical method you deem appropriate given the data, e.g. model-based standard errors or bootstrap standard errors
+
+```{r}
+## Model 1 (Unadjusted Model)
+summary(mod_1.2)
+b_unadj = coef(mod_1.2)
+cov_unadj = vcov(mod_1.2)
+
+output = data.frame(matrix(NA, nrow = 30, ncol = 6))
+colnames(output) = c('age', 'Diff', 'SD', 'low_CI', 'high_CI', 'CI')
+output$age = c(65:94)
+
+output = output %>%
+  mutate(
+    agem65 = age - 65,
+    age_sp0 = ifelse(age>=68, age - 68, 0),
+    age_sp1 = ifelse(age>=75, age - 75, 0),
+    age_sp2 = ifelse(age>=85, age - 85, 0)
+  ) %>%
+  mutate(
+    Diff = case_when(
+      age >= 85 ~ b_unadj[6] + agem65*b_unadj[7] + age_sp0*b_unadj[8] + age_sp1*b_unadj[9] + age_sp2*b_unadj[10],
+      age >= 75 ~ b_unadj[6] + agem65*b_unadj[7] + age_sp0*b_unadj[8] + age_sp1*b_unadj[9],
+      age >= 68 ~ b_unadj[6] + agem65*b_unadj[7] + age_sp0*b_unadj[8],
+      TRUE ~ b_unadj[6] + agem65*b_unadj[7]
+))
+
+sd_func <- function(agem65, age_sp0, age_sp1, age_sp2) {
+  A = matrix(c(1, agem65, age_sp0, age_sp1, age_sp2),
+              ncol = 5,
+              nrow = 1)
+  SD = A %*% cov_unadj[6:10, 6:10] %*% t(A)
+  return(sqrt(SD))
+}
+
+output <- output %>%
+  rowwise() %>%
+  mutate(SD = sd_func(agem65, age_sp0, age_sp1, age_sp2)) %>%
+  ungroup() 
+
+df = summary(mod_1.2)$df[2]
+output <- output %>%
+  mutate(
+    low_CI = round(Diff - qt(0.975,df)*SD),
+    high_CI = round(Diff + qt(0.975,df)*SD),
+    CI = sprintf(
+      "%.0f, %.0f", 
+      round(Diff - qt(0.975, df) * SD), 
+      round(Diff + qt(0.975, df) * SD)
+    ))
+
+output[,c(1:6)]
+
+
+## Visualization
+plot_1 <- ggplot(output, aes(x = age, y = Diff)) + 
+  geom_point() + 
+  geom_line(aes(y = Diff)) + # Plot the fitted line
+  geom_ribbon(aes(ymin = low_CI, ymax = high_CI), alpha = 0.2) +  
+  labs(title = "Difference in average medical expenditures vs. age (unadjust)",
+       x = "Age",
+       y = "Difference in average medical") +
+  theme_minimal() + 
+  ylim(-15000, 5000) + 
+  custom_theme
+
+```
+
+
+```{r}
+## Model 2 (Adjusted)
+mod_2 = lm(totalexp ~ agem65 + age_sp0 + age_sp1 + age_sp2 + age_sp2 + ever
+                         + I(ever*agem65) + I(ever*age_sp0) + I(ever*age_sp1) + I(ever*age_sp2)
+                         + male + sregion + marital + RACE3 + educate, dat)
+
+summary(mod_2)
+b_unadj = coef(mod_2)
+cov_unadj = vcov(mod_2)
+
+output.2 = data.frame(matrix(NA, nrow = 30, ncol = 6))
+colnames(output.2) = c('age', 'Diff', 'SD', 'low_CI', 'high_CI', 'CI')
+output.2$age = c(65:94)
+
+output.2 = output.2 %>%
+  mutate(
+    agem65 = age - 65,
+    age_sp0 = ifelse(age>=68, age - 68, 0),
+    age_sp1 = ifelse(age>=75, age - 75, 0),
+    age_sp2 = ifelse(age>=85, age - 85, 0)
+  ) %>%
+  mutate(
+    Diff = case_when(
+      age >= 85 ~ b_unadj[6] + agem65*b_unadj[7] + age_sp0*b_unadj[8] + age_sp1*b_unadj[9] + age_sp2*b_unadj[10],
+      age >= 75 ~ b_unadj[6] + agem65*b_unadj[7] + age_sp0*b_unadj[8] + age_sp1*b_unadj[9],
+      age >= 68 ~ b_unadj[6] + agem65*b_unadj[7] + age_sp0*b_unadj[8],
+      TRUE ~ b_unadj[6] + agem65*b_unadj[7]
+))
+
+sd_func <- function(agem65, age_sp0, age_sp1, age_sp2) {
+  A = matrix(c(1, agem65, age_sp0, age_sp1, age_sp2),
+              ncol = 5,
+              nrow = 1)
+  SD = A %*% cov_unadj[6:10, 6:10] %*% t(A)
+  return(sqrt(SD))
+}
+
+output.2 <- output.2 %>%
+  rowwise() %>%
+  mutate(SD = sd_func(agem65, age_sp0, age_sp1, age_sp2)) %>%
+  ungroup() 
+
+df = summary(mod_2)$df[2]
+output.2 <- output.2 %>%
+  mutate(
+    low_CI = round(Diff - qt(0.975,df)*SD),
+    high_CI = round(Diff + qt(0.975,df)*SD),
+    CI = sprintf(
+      "%.0f, %.0f", 
+      round(Diff - qt(0.975, df) * SD), 
+      round(Diff + qt(0.975, df) * SD)
+    ))
+
+## Visualization
+plot_2 <- ggplot(output.2, aes(x = age, y = Diff)) + 
+  geom_point() + 
+  geom_line(aes(y = Diff)) + # Plot the fitted line
+  geom_ribbon(aes(ymin = low_CI, ymax = high_CI), alpha = 0.2) +  
+  labs(title = "Difference in average medical expenditures vs. age (adjust)",
+       x = "Age",
+       y = "Difference in average medical") +
+  theme_minimal() +
+  ylim(-15000, 5000) + 
+  custom_theme
+```
+
+```{r}
+output[,c(1:6)]
+output.2[,c(1:6)]
+```
+
+```{r}
+plot_1
+plot_2
+```
+```{r}
+ggplot() + 
+  geom_point(data = output, aes(x = age, y = Diff), color = "blue") + 
+  geom_line(data = output, aes(x = age, y = Diff), color = "blue") + 
+  geom_ribbon(data = output, aes(x = age, ymin = low_CI, ymax = high_CI), alpha = 0.2, fill = "blue") +
+  geom_point(data = output.2, aes(x = age, y = Diff), color = "red") + 
+  geom_line(data = output.2, aes(x = age, y = Diff), color = "red") + 
+  geom_ribbon(data = output.2, aes(x = age, ymin = low_CI, ymax = high_CI), alpha = 0.2, fill = "red") +
+  labs(title = "Difference in average medical expenditures vs. age",
+       x = "Age",
+       y = "Difference in average medical") +
+  theme_minimal() +
+  ylim(-15000, 5000)
+```
+```{r}
+
+```
+
+
+

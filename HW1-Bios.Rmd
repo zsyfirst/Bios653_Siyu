@@ -1,0 +1,486 @@
+---
+title: "HW1-Bios"
+author: "Sunan Gao"
+date: "2024-02-06"
+output: html_document
+---
+```{r}
+library(tidyverse)
+library(splines)
+```
+
+```{r}
+custom_theme <- theme(
+  panel.background = element_blank(),
+  axis.ticks = element_blank(),
+  axis.text = element_text(size = 12),
+  axis.title = element_text(size = 14, face = "bold"),
+  axis.line = element_line(size = 0.5)
+)
+
+```
+
+## Assignment-1.1
+```{r setup, include=FALSE}
+load("nepal.anthro.rdata")
+
+## Complete cases
+nepal_cc <- nepal.anthro |> arrange(id, num) |> group_by(id) |>
+  filter(row_number() == 1L) |>
+  select(id, age, ht, wt, sex) |> 
+  filter(!is.na(age) & !is.na(ht) & !is.na(wt)) |>
+  ungroup()
+
+plot_wt_age_sex <- ggplot(data = nepal_cc, aes(x = age, y = wt, 
+                                               color = as.factor(sex))) +
+  geom_jitter(size = 1.5, alpha = 0.75) +
+  geom_smooth(linewidth = 1.5, color = "black", fill = "black", alpha = 0.1) + 
+  labs(x = "Age at baseline (in months)",
+       y = "Weight at baseline (in kilograms)") +
+  scale_x_continuous(breaks = seq(0, 60, 10)) +
+  scale_y_continuous(breaks = seq(0, 20, 5)) +
+  custom_theme +
+  geom_vline(xintercept = 12, linetype = "dashed", linewidth = 0.75) + 
+  geom_vline(xintercept = 30, linetype = "dashed", linewidth = 0.75) + 
+  geom_vline(xintercept = 50, linetype = "dashed", linewidth = 0.75) + 
+  # Add the color legend specifications
+  scale_color_manual(breaks = c(1, 2),
+                     values = c("#920045", "#67733C"),
+                     labels = c("Male", "Female")) +
+  theme(legend.position = c(0.1, 0.9),
+        legend.title = element_blank(),
+        legend.text = element_text(size = 10),
+        legend.key = element_blank())  
+plot_wt_age_sex
+```
+
+## Assignment-1.2
+```{r}
+plot_wt_age_sex <- ggplot(data = nepal_cc, aes(x = age, y = wt, 
+                                               color = as.factor(sex))) +
+  geom_jitter(size = 1.5, alpha = 0.75) +
+  labs(x = "Age at baseline (in months)",
+       y = "Weight at baseline (in kilograms)") +
+  scale_x_continuous(breaks = seq(0, 60, 10)) +
+  scale_y_continuous(breaks = seq(0, 20, 5)) +
+  custom_theme +
+  # Add the color legend specifications
+  scale_color_manual(breaks = c(1, 2),
+                     values = c("#920045", "#67733C"),
+                     labels = c("Male", "Female")) +
+  theme(legend.position = c(0.1, 0.9),
+        legend.title = element_blank(),
+        legend.text = element_text(size = 10),
+        legend.key = element_blank())  
+plot_wt_age_sex
+
+plot_wt_age_sex_ns <- plot_wt_age_sex + 
+  geom_smooth(method = "glm", formula = y ~ ns(x, df = 3), se = FALSE,
+              linewidth = 1.5)
+plot_wt_age_sex_ns
+```
+## Assignment-1.3
+```{r}
+colnames(nepal_cc)
+model3 <- lm(wt~age, data = nepal_cc)
+summary(model3)
+
+
+```
+## Assignment-1.4
+```{r}
+plot_wt_age_sex <- ggplot(data = nepal_cc, aes(x = age, y = wt, 
+                                               color = as.factor(sex))) +
+  geom_jitter(size = 1.5, alpha = 0.75) +
+  geom_smooth(method = 'lm',alpha = 0.75,
+              linewidth = 1.5, color = "black", fill = "black", alpha = 0.1) + 
+  labs(x = "Age at baseline (in months)",
+       y = "Weight at baseline (in kilograms)") +
+  scale_x_continuous(breaks = seq(0, 60, 10)) +
+  scale_y_continuous(breaks = seq(0, 20, 5)) +
+  custom_theme +
+  geom_vline(xintercept = 12, linetype = "dashed", linewidth = 0.75) + 
+  geom_vline(xintercept = 30, linetype = "dashed", linewidth = 0.75) + 
+  geom_vline(xintercept = 50, linetype = "dashed", linewidth = 0.75) + 
+  # Add the color legend specifications
+  scale_color_manual(breaks = c(1, 2),
+                     values = c("#920045", "#67733C"),
+                     labels = c("Male", "Female")) +
+  theme(legend.position = c(0.1, 0.9),
+        legend.title = element_blank(),
+        legend.text = element_text(size = 10),
+        legend.key = element_blank())  
+plot_wt_age_sex
+```
+
+## Assignment-2.1
+```{r}
+dim(nepal_cc)
+## 1.a.	create three new variables
+nepal_cc$age_c = nepal_cc$age - 6
+nepal_cc$agesp6 = ifelse(nepal_cc$age-6>0, nepal_cc$age-6,0)
+nepal_cc$agesp12 = ifelse(nepal_cc$age-12>0, nepal_cc$age-12,0)
+
+## 1.b. Regress weight on age_c, age_sp6 and age_sp12
+library(ggplot2)
+model21 = lm(wt ~ age + agesp6 + agesp12, nepal_cc)
+summary(model21)
+nepal_cc$model_21_predict = predict(model21)
+
+plot_wt_age_21 <- ggplot(data = nepal_cc, aes(x = age, y = wt, 
+                                              color = as.factor(sex))) +
+  geom_jitter(size = 1.5, alpha = 0.75) +
+  geom_line(linewidth = 1.5, alpha = 0.75,
+            aes(y = model_21_predict), color = "#56B4E9") + 
+  labs(x = "Age at baseline (in months)",
+       y = "Weight at baseline (in kilograms)") +
+  scale_x_continuous(breaks = seq(0, 60, 10)) +
+  scale_y_continuous(breaks = seq(0, 20, 5)) +
+  custom_theme +
+  # Add the color legend specifications
+  scale_color_manual(breaks = c(1, 2),
+                     values = c("#920045", "#67733C"),
+                     labels = c("Male", "Female")) +
+  theme(legend.position = c(0.1, 0.9),
+        legend.title = element_blank(),
+        legend.text = element_text(size = 10),
+        legend.key = element_blank())+
+  geom_text(aes(label = "Linear Spline"), 
+            x = 50, y = 7, color = "#56B4E9", size = 4, hjust = 0)
+plot_wt_age_21
+```
+## Assignment-2.2
+```{r}
+dim(nepal_cc)
+## 1.a.	create three new variables
+nepal_cc$age2 = (nepal_cc$age - 6)^2
+nepal_cc$age3 = (nepal_cc$age - 6)^3
+nepal_cc$age_csp1 = ifelse(nepal_cc$age-6>0, (nepal_cc$age-6)^3, 0)
+
+## 1.b. Regress weight on age_c, age_sp6 and age_sp12
+model22 = lm(wt ~ age_c + age2 + age3 + age_csp1, nepal_cc)
+summary(model22)
+nepal_cc$model_22_predict = predict(model22)
+
+plot_wt_age_22 <- ggplot(data = nepal_cc, aes(x = age, y = wt, 
+                                              color = as.factor(sex))) +
+  geom_jitter(size = 1.5, alpha = 0.75) +
+  geom_line(linewidth = 1, alpha = 0.75,
+            aes(y = model_21_predict), color = '#56B4E9') + 
+  geom_line(linewidth = 1, alpha = 0.75,
+            aes(y = model_22_predict), color = "black") + 
+  labs(x = "Age at baseline (in months)",
+       y = "Weight at baseline (in kilograms)") +
+  scale_x_continuous(breaks = seq(0, 60, 10)) +
+  scale_y_continuous(breaks = seq(0, 20, 5)) +
+  custom_theme +
+  # Add the color legend specifications
+  scale_color_manual(breaks = c(1, 2),
+                     values = c("#920045", "#67733C"),
+                     labels = c("Male", "Female")) +
+  theme(legend.position = c(0.1, 0.9),
+        legend.title = element_blank(),
+        legend.text = element_text(size = 10),
+        legend.key = element_blank())+
+  geom_text(aes(label = "Linear Spline"), 
+            x = 50, y = 7, color = "#56B4E9", size = 4, hjust = 0) +
+  geom_text(aes(label = "Cubic Spline"), 
+            x = 50, y = 6, color = "black", size = 4, hjust = 0)
+
+plot_wt_age_22
+```
+## Assignment-2.3
+```{r}
+dim(nepal_cc)
+
+## 2.b. Regress weight on age_c, age_sp6 and age_sp12
+model23 = lm(wt ~ ns(age, 3), nepal_cc)
+summary(model23)
+nepal_cc$model_23_predict = predict(model23)
+
+plot_wt_age_23 <- ggplot(data = nepal_cc, aes(x = age, y = wt, 
+                                              color = as.factor(sex))) +
+  geom_jitter(size = 1.5, alpha = 0.75) +
+  
+  geom_line(linewidth = 1, alpha = 0.75,
+            aes(y = model_21_predict), color = '#56B4E9') + 
+  geom_line(linewidth = 1,alpha = 0.75,
+            aes(y = model_22_predict), color = "black") + 
+  geom_line(linewidth = 1, alpha = 0.75,
+            aes(y = model_23_predict), color = "#E69F00") + 
+  
+  labs(x = "Age at baseline (in months)",
+       y = "Weight at baseline (in kilograms)") +
+  scale_x_continuous(breaks = seq(0, 60, 10)) +
+  scale_y_continuous(breaks = seq(0, 20, 5)) +
+  custom_theme +
+  # Add the color legend specifications
+  scale_color_manual(breaks = c(1, 2),
+                     values = c("#920045", "#67733C"),
+                     labels = c("Male", "Female")) +
+  theme(legend.position = c(0.1, 0.9),
+        legend.title = element_blank(),
+        legend.text = element_text(size = 10),
+        legend.key = element_blank()) +
+  geom_text(aes(label = "Linear Spline"), 
+            x = 50, y = 7, color = "#56B4E9", size = 4, hjust = 0) +
+  geom_text(aes(label = "Cubic Spline"), 
+            x = 50, y = 6, color = "black", size = 4, hjust = 0) +
+  geom_text(aes(label = "Natural Spline"), 
+            x = 50, y = 5, color = "#E69F00", size = 4, hjust = 0)
+
+
+plot_wt_age_23
+```
+## Assignment-2.4
+```{r}
+model23
+mt_model23 = model.matrix(model23)
+
+# f.	Choose three children from the data with different ages, e.g. 12, 24 and 48
+num_12 = which(nepal_cc$age == 12)[1]
+num_24 = which(nepal_cc$age == 24)[1]
+num_48 = which(nepal_cc$age == 48)[1]
+
+mt_model23[num_12,]
+nepal_cc[num_12,]
+predict(model23, nepal_cc)[c(num_12, num_24, num_48)]
+
+X <- model.matrix(model23)
+
+# Calculate the hat matrix
+H <- X %*% solve(t(X) %*% X) %*% t(X)
+t(matrix(nepal_cc$wt)) %*% matrix(H[num_12,])
+t(matrix(nepal_cc$wt)) %*% matrix(H[num_24,])
+t(matrix(nepal_cc$wt)) %*% matrix(H[num_48,])
+
+
+children <- nepal_cc[c(num_12, num_24, num_48),]
+
+# Extract rows of H corresponding to the selected children
+rows <- children$wt
+
+# Plot each child's row of H against age
+plot(children$age, H[num_12,], type = "b", col = "red", xlab = "Age", ylab = "Row of H", main = "Hat Matrix vs Age")
+points(children$age, H[num_24,], type = "b", col = "blue")
+points(children$age, rows[3,], type = "b", col = "green")
+legend("topright", legend = c("Child 1", "Child 2", "Child 3"), col = c("red", "blue", "green"), pch = 1)
+
+```
+
+```{r}
+# 假设'H'是你已经计算得到的帽子矩阵，'data'是包含年龄信息的数据框架
+# 假设已经计算得到的帽子矩阵如上所示
+
+# 创建一个数据框架包含年龄和健康指标
+data <- data.frame(Age = c(12, 18, 24, 30, 36, 42, 48),
+                   Health_Index = c(85, 92, 95, 98, 100, 105, 110))
+
+# 选择三个不同年龄的孩子
+children <- data[data$Age %in% c(12, 24, 48), ]
+
+# 已经计算得到的帽子矩阵行
+H_rows <- matrix(c(0.2, 0.3, 0.5, 
+                   0.4, 0.4, 0.2, 
+                   0.6, 0.2, 0.2), 
+                 nrow = 3, byrow = TRUE)
+
+# 绘制每个孩子的帽子矩阵行与年龄的关系
+plot(children$Age, H_rows[1,], type = "b", col = "red", xlab = "Age", ylab = "Row of H", main = "Hat Matrix vs Age")
+points(children$Age, H_rows[2,], type = "b", col = "blue")
+points(children$Age, H_rows[3,], type = "b", col = "green")
+legend("topright", legend = c("Child 1", "Child 2", "Child 3"), col = c("red", "blue", "green"), pch = 1)
+
+```
+
+
+## Assignment-3.1
+```{r}
+dim(nepal_cc)
+set.seed(653)
+data = nepal_cc
+rows <- 1:nrow(data)
+
+# Shuffle the rows (sampling without replacement)
+shuffled_rows <- sample(rows, replace = FALSE)
+B <- 10 # Declare the number of folds
+
+# Divide the rows into 10 folds and code each row according to which fold they belong
+folds <- cut(rows, breaks = B, labels = FALSE)
+
+# Create a blank data set to store predicted values from cross validation
+pred_armcircum <- NULL
+
+# Build a function to save results
+fit_and_predict <- function(degree, train_data, test_data) {
+  # fit the model
+  model <- lm(wt ~ ns(age, degree), data = train_data)
+  # get predictions
+  pred_col <- paste0("model", degree, "_pred")
+  
+  test_data[[pred_col]] <- predict(model, newdata = test_data)
+  return(test_data)
+}
+
+# Conduct the cross-validation procedure
+for (i in 1:B) {
+  # Divide the data set into training and test data set and specify the row numbers
+  test_rows <- shuffled_rows[which(folds == i)]
+  train_rows <- shuffled_rows[which(folds != i)]
+  
+  # Call the relevant rows in the data
+  test_data <- data[test_rows, ]
+  train_data <- data[train_rows, ]
+  
+  for (degree in 1:8) {
+    test_data <- fit_and_predict(degree, train_data, test_data)
+  }
+  # Stack the data altogether
+  pred_armcircum <- rbind(pred_armcircum, test_data)
+}
+
+# Calculate cross-validated MSE
+cvmse_values <- numeric(8)
+cvmse_values_train <- numeric(8)
+for (degree in 1:8) {
+  pred_col <- paste0("model", degree, "_pred")
+  cvmse_values[degree] <- sum((pred_armcircum$age - pred_armcircum[[pred_col]])^2)
+  
+  ## calculate non-cv prediction error
+  model <- lm(wt ~ ns(age, degree), data = data)
+  cvmse_values_train[degree] <- sum((data$age - predict(model, data))^2)
+}
+
+
+# Append the cross validated MSE to the model_mse data frame
+model_mse <- 
+  data.frame(df = c(1:8),
+             cvmse = cvmse_values,
+             cvmse_train = cvmse_values_train)
+print(model_mse)
+
+# 3.3 plot total cross-validated prediction error against the degrees of freedom
+plot_CV_NS_df <- ggplot(data = model_mse, aes(x = df, y = cvmse)) +
+  geom_line(linewidth = 1, alpha = 0.75,
+            aes(y = cvmse), color = 'black') + 
+  custom_theme + 
+  theme(legend.position = c(0.1, 0.9),
+        legend.title = element_blank(),
+        legend.text = element_text(size = 10),
+        legend.key = element_blank()) + 
+  geom_text(aes(label = "CV Prediction Error"), 
+            x = 5, y = 114890, color = "black", size = 4, hjust = 0)
+
+plot_CV_NS_df # Model with df=4 showed the lowets
+```
+
+
+## Assignment 3.4
+```{r}
+# 3.4 Compare the cross-validated prediction error to the non-CV prediction error for each df where the latter uses the same data to fit the model as assess its prediction error.
+
+plot_CV_NS_df <- ggplot(data = model_mse, aes(x = df, y = cvmse)) +
+  geom_line(linewidth = 1, alpha = 0.75,
+            aes(y = cvmse), color = 'black') + 
+  geom_line(linewidth = 1, alpha = 0.75,
+            aes(y = cvmse_train), color = '#E69F00') + 
+  custom_theme + 
+  theme(legend.position = c(0.1, 0.9),
+        legend.title = element_blank(),
+        legend.text = element_text(size = 10),
+        legend.key = element_blank()) + 
+  geom_text(aes(label = "CV Prediction Error"), 
+            x = 5, y = 114890, color = "black", size = 4, hjust = 0) +
+  geom_text(aes(label = "Non-CV Prediction Error"), 
+            x = 5, y = 114895, color = "#E69F00", size = 4, hjust = 0)
+
+plot_CV_NS_df # Model with df=4 showed the lowets
+```
+
+## Assignment 3.5
+```{r}
+# 3.5 Fit this optimal model to all of the data
+model35 = lm(wt ~ ns(age, 4), data)
+summary(model35)
+
+nepal_cc$model_35_predict = predict(model35)
+
+plot_wt_age_35 <- ggplot(data = nepal_cc, aes(x = age, y = wt, 
+                                              color = as.factor(sex))) +
+  geom_jitter(size = 1.5, alpha = 0.75) +
+  
+  geom_line(linewidth = 1, alpha = 0.75,
+            aes(y = model_35_predict), color = "#E69F00") + 
+  
+  labs(x = "Age at baseline (in months)",
+       y = "Weight at baseline (in kilograms)") +
+  scale_x_continuous(breaks = seq(0, 60, 10)) +
+  scale_y_continuous(breaks = seq(0, 20, 5)) +
+  custom_theme +
+  # Add the color legend specifications
+  scale_color_manual(breaks = c(1, 2),
+                     values = c("#920045", "#67733C"),
+                     labels = c("Male", "Female")) +
+  theme(legend.position = c(0.1, 0.9),
+        legend.title = element_blank(),
+        legend.text = element_text(size = 10),
+        legend.key = element_blank()) +
+  geom_text(aes(label = "Natural Spline with df=4"), 
+            x = 40, y = 7, color = "#E69F00", size = 4, hjust = 0)
+
+plot_wt_age_35
+```
+
+
+## Assignment-4.1
+```{r}
+#install.packages("scatterplot3d")
+#install.packages("rgl")
+library(rgl)
+library(scatterplot3d)
+#
+plot3d(data$age,data$ht,data$wt)
+scatterplot3d(data$age,data$ht,
+              data$wt,pch=16,type="h",highlight.3d=TRUE,
+              xlab="age (months)",ylab="height (cm)",zlab="weight (grams)",
+              main="Nepal Children's Study")
+pairs(data[,c(2:4)])
+```
+
+## Assignment-4.2
+```{r}
+model_42 = lm(wt ~ age + ht, data)
+summary(model_42)
+```
+
+## Assignment-4.3
+```{r}
+data <- data |>
+  mutate(resid.age = lm(age ~ ht, data = data)$residuals,
+         resid.wt = lm(wt ~ ht, data = data)$residuals)
+
+model_43 = lm(resid.wt ~ resid.age, data)
+
+summary(model_43)
+summary(model_42) #The same.
+
+
+# Plot the estimates and we add a fitted line
+model43 <- ggplot(data = data,
+                  aes(x = resid.age, y = resid.wt)) +
+  geom_jitter(alpha = 0.5) +
+  geom_line(linewidth = 1.5, alpha = 0.75,
+            aes(y = predict(model_43, data)), color = "#E69F00") + 
+  labs(x = "Residuals of age on height",
+       y = "Residuals of weight on height",
+       title = "Adjusted variable plot for weight on age, adjust height") +
+  custom_theme
+
+model43
+
+```
+## Assignment-4.4
+```{r}
+
+```
+
